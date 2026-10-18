@@ -45,6 +45,7 @@ import datetime
 # ------------------------------------
 
 
+VERSION = "3.3"
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.local.yaml"
 
 V7_BANNER = r"""
@@ -55,7 +56,7 @@ __   __    |  ___| | | |
   | ||____|| |   | |_| | | | | | (_) | | | | |_| |>  <
   \_/      |_|    \__|_| |_|_|  \___/|_| |_|\__, /_/\_/
                                             |___/
-            R E L A Y   P R O X Y   v3.1
+            R E L A Y   P R O X Y   v3.3
        Author : v7lthronyx (Aiden Azad)
        GitHub : github.com/v74all/badplace
 """
@@ -551,7 +552,7 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
         # Internal health endpoints
         if self.path.startswith("/health"):
             self._safe_json_response(200, {
-                "status": "ok", "mode": "relay", "version": "3.1",
+                "status": "ok", "mode": "relay", "version": VERSION,
                 "mitm_enabled": self.mitm_enabled
             })
             return
@@ -613,7 +614,10 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
                 headers_dict.pop(k, None)
 
         body = b""
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0) or 0)
+        except (TypeError, ValueError):
+            content_length = 0
         if content_length > 0:
             try:
                 body = self.rfile.read(content_length)
@@ -644,7 +648,13 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
         try:
             self.send_response(status_code)
             for h_name, h_value in response_headers.items():
-                if h_name.lower() in ('connection', 'content-length', 'transfer-encoding'):
+                # The relay (Vercel fetch / Apps Script UrlFetchApp) already
+                # decompresses the upstream body, so forwarding the upstream
+                # Content-Encoding would make the browser try to decompress
+                # plain bytes and corrupt the response. Content-Length is
+                # recomputed below from the actual body we send.
+                if h_name.lower() in ('connection', 'content-length',
+                                      'transfer-encoding', 'content-encoding'):
                     continue
                 if isinstance(h_value, list):
                     for val in h_value:
@@ -930,10 +940,18 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 def main():
     parser = argparse.ArgumentParser(description="v7lthronyx Relay Proxy (Local Mode)")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to config YAML file")
+    parser.add_argument("--version", action="version", version=f"v7lthronyx Relay Proxy v{VERSION}")
+    parser.add_argument("--check", action="store_true",
+                       help="Run connectivity checks against the configured relay and exit, without starting the proxy.")
     args = parser.parse_args()
 
     config_path = Path(args.config)
     cfg = load_config(config_path)
+
+    if args.check:
+        relay_url = get_relay_url(cfg)
+        ok = run_connectivity_checks(relay_url)
+        sys.exit(0 if ok else 1)
 
     bind_host = cfg.get("bind_host", "127.0.0.1")
     bind_port = cfg.get("bind_port", 8085)

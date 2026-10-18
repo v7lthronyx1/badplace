@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'ok',
       service: 'HTTP/HTTPS Relay Proxy',
-      version: '3.0',
+      version: '3.3',
       platform: 'vercel',
       message: 'Use POST to relay HTTP requests'
     });
@@ -58,15 +58,31 @@ export default async function handler(req, res) {
       }
 
       const response = await fetch(url, fetchOptions);
-      const responseBody = await response.text();
       const responseHeaders = Object.fromEntries(response.headers.entries());
 
       console.log(`Response: ${response.status}`);
 
+      // Decide text vs binary from the content type. Using response.text()
+      // for binary payloads (images, fonts, archives, ...) corrupts them,
+      // so those are base64-encoded and returned as body_b64, which the
+      // local proxy decodes back to raw bytes.
+      const contentType = (responseHeaders['content-type'] || '').toLowerCase();
+      const isText = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|.*\+(json|xml)|image\/svg)/.test(contentType)
+        || contentType.includes('charset=');
+
+      if (isText) {
+        return res.status(200).json({
+          status: response.status,
+          headers: responseHeaders,
+          body: await response.text()
+        });
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
       return res.status(200).json({
         status: response.status,
         headers: responseHeaders,
-        body: responseBody
+        body_b64: buffer.toString('base64')
       });
 
     } catch (error) {

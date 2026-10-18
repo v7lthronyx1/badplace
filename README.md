@@ -15,9 +15,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-brightgreen)](https://python.org)
 [![Vercel](https://img.shields.io/badge/Vercel-Deploy-black)](https://vercel.com)
+[![Version](https://img.shields.io/badge/version-3.3-informational)](#)
 
 **Author:** [v7lthronyx (Aiden Azad)](https://github.com/v74all)  
 **GitHub:** [github.com/v74all/badplace](https://github.com/v74all/badplace)
+
+---
+
+<p align="center">
+  <img src="docs/screenshots/proxy-startup.png" width="620" alt="badplace proxy startup">
+</p>
 
 ---
 
@@ -159,8 +166,10 @@ export no_proxy='localhost,127.0.0.1'
 ### Commands
 
 ```bash
-./run-local.sh     # Start the proxy
-./stop-local.sh    # Stop the proxy
+./run-local.sh                # Start the proxy
+./stop-local.sh               # Stop the proxy
+python3 proxy.py --version    # Print version and exit
+python3 proxy.py --check      # Run connectivity checks and exit, without starting the proxy
 ```
 
 ### Security
@@ -295,8 +304,10 @@ export no_proxy='localhost,127.0.0.1'
 ### دستورات
 
 ```bash
-./run-local.sh     # شروع پروکسی
-./stop-local.sh    # توقف پروکسی
+./run-local.sh                # شروع پروکسی
+./stop-local.sh               # توقف پروکسی
+python3 proxy.py --version    # نمایش نسخه و خروج
+python3 proxy.py --check      # تست اتصال و خروج، بدون اجرای پروکسی
 ```
 
 ### امنیت
@@ -433,6 +444,7 @@ curl http://127.0.0.1:8085/test-relay
 ├── vercel.json               # Vercel configuration
 ├── google-apps-script-relay.gs  # Google Apps Script relay
 ├── .banner                   # ASCII art banner
+├── docs/screenshots/         # README screenshots
 └── README.md                 # This file
 ```
 

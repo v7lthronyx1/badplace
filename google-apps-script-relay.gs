@@ -75,20 +75,30 @@ function doPost(e) {
     const responseHeaders = response.getAllHeaders();
     const responseBytes = response.getContent();
 
-    // Decide how to return the body:
-    //   - if it's text, return as plain string
-    //   - otherwise, base64‑encode and return
+    // Decide how to return the body based on the content type.
+    //   - text-like  → return as a UTF-8 string in `body`
+    //   - binary     → base64-encode into `body_b64`
+    // Note: getDataAsString() never throws on binary input (it just produces
+    // garbage), so a try/catch cannot be used to detect binary content.
+    let contentType = "";
+    for (const key in responseHeaders) {
+      if (key.toLowerCase() === "content-type") {
+        contentType = String(responseHeaders[key]).toLowerCase();
+        break;
+      }
+    }
+
+    const isText = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|.*\+(json|xml)|image\/svg)/.test(contentType)
+      || contentType.indexOf("charset=") !== -1;
+
     let result;
-    try {
-      // Attempt to decode as UTF‑8 text
-      const textBody = Utilities.newBlob(responseBytes).getDataAsString();
+    if (isText) {
       result = {
         status: responseCode,
         headers: responseHeaders,
-        body: textBody
+        body: Utilities.newBlob(responseBytes).getDataAsString()
       };
-    } catch (_) {
-      // Binary content → return base64
+    } else {
       result = {
         status: responseCode,
         headers: responseHeaders,
@@ -115,7 +125,7 @@ function doGet(e) {
   return jsonOut({
     status: "ok",
     service: "HTTP/HTTPS Relay Proxy",
-    version: "3.2",
+    version: "3.3",
     message: "Send POST requests to relay HTTP calls.",
     note: "Optimized for Iranian filtering conditions"
   });
