@@ -21,7 +21,7 @@ __   __    |  ___| | | |
 ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝
 
   ╔══════════════════════════════════════════╗
-  ║  v7lthronyx RELAY PROXY  v3.1            ║
+  ║  v7lthronyx RELAY PROXY  v3.4            ║
   ║  HTTP + HTTPS CONNECT + SOCKS5 + DoH     ║
   ║  Binds to 127.0.0.1 only — Not a VPN     ║
   ╚══════════════════════════════════════════╝

@@ -60,6 +60,17 @@ if grep -q 'relay_url: ""' config.local.yaml && grep -q 'apps_script_url: ""' co
     exit 1
 fi
 
+if grep -q 'YOUR_SCRIPT_ID' config.local.yaml && [ -z "${APPS_SCRIPT_URL:-}" ] && [ -z "${RELAY_URL:-}" ]; then
+    echo -e "${RED}[ERROR]${NC} apps_script_url is still the placeholder. Deploy your own Apps Script"
+    echo "  and put its /exec URL in config.local.yaml (see README)."
+    exit 1
+fi
+
+if grep -q 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET' config.local.yaml; then
+    echo -e "${YELLOW}[WARN]${NC} auth_key is still the placeholder. Set a long random auth_key in"
+    echo "  config.local.yaml and the SAME value as AUTH_KEY in your Apps Script."
+fi
+
 echo -e "${YELLOW}[1/4]${NC} Setting up Python virtual environment..."
 if [ ! -d ".venv" ]; then
     python3 -m venv .venv

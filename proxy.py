@@ -19,6 +19,7 @@ import errno
 import http.client
 import json
 import os
+import random
 import select
 import signal
 import socket
@@ -45,7 +46,7 @@ import datetime
 # ------------------------------------
 
 
-VERSION = "3.3"
+VERSION = "3.4"
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.local.yaml"
 
 V7_BANNER = r"""
@@ -56,7 +57,7 @@ __   __    |  ___| | | |
   | ||____|| |   | |_| | | | | | (_) | | | | |_| |>  <
   \_/      |_|    \__|_| |_|_|  \___/|_| |_|\__, /_/\_/
                                             |___/
-            R E L A Y   P R O X Y   v3.3
+            R E L A Y   P R O X Y   v3.4
        Author : v7lthronyx (Aiden Azad)
        GitHub : github.com/v74all/badplace
 """
@@ -424,6 +425,80 @@ class DoHResolver:
             return json.loads(body.decode("utf-8"))
 
 
+class FrontedRelay:
+    def __init__(self, front_sni: str, front_ips=None, timeout=(8, 45)):
+        self.front_sni = front_sni
+        self.front_ips = list(front_ips or [])
+        self.timeout = timeout
+
+    def _connect_ip(self) -> str:
+        if self.front_ips:
+            return random.choice(self.front_ips)
+        return socket.gethostbyname(self.front_sni)
+
+    def request(self, method: str, url: str, body: bytes = None, headers=None, max_redirects: int = 4):
+        headers = dict(headers or {})
+        current_method = method.upper()
+        current_body = body or b""
+        for _ in range(max_redirects + 1):
+            parsed = urllib.parse.urlparse(url)
+            host = parsed.hostname
+            port = parsed.port or 443
+            path = parsed.path or "/"
+            if parsed.query:
+                path = f"{path}?{parsed.query}"
+
+            connect_ip = self._connect_ip()
+            context = ssl.create_default_context()
+            raw_sock = socket.create_connection((connect_ip, port), timeout=self.timeout[0])
+            raw_sock.settimeout(self.timeout[1])
+            tls_sock = context.wrap_socket(raw_sock, server_hostname=self.front_sni)
+            try:
+                req_lines = [f"{current_method} {path} HTTP/1.1"]
+                base_headers = {"Host": host, "Connection": "close", "Accept": "*/*"}
+                for k, v in headers.items():
+                    base_headers[k] = v
+                if current_method in ("POST", "PUT", "PATCH", "DELETE") and current_body:
+                    base_headers["Content-Length"] = str(len(current_body))
+                for k, v in base_headers.items():
+                    req_lines.append(f"{k}: {v}")
+                request_head = ("\r\n".join(req_lines) + "\r\n\r\n").encode("latin-1")
+                tls_sock.sendall(request_head)
+                if current_body:
+                    tls_sock.sendall(current_body)
+
+                response = http.client.HTTPResponse(tls_sock, method=current_method)
+                response.begin()
+                status = response.status
+                resp_headers = {k: v for k, v in response.getheaders()}
+                resp_body = response.read()
+            finally:
+                try:
+                    tls_sock.close()
+                except OSError:
+                    pass
+
+            if status in (301, 302, 303, 307, 308):
+                location = None
+                for k, v in resp_headers.items():
+                    if k.lower() == "location":
+                        location = v
+                        break
+                if not location:
+                    return status, resp_headers, resp_body
+                url = urllib.parse.urljoin(url, location)
+                if status in (301, 302, 303):
+                    current_method = "GET"
+                    current_body = b""
+                    headers.pop("Content-Type", None)
+                    headers.pop("content-type", None)
+                continue
+
+            return status, resp_headers, resp_body
+
+        return 508, {}, b""
+
+
 # ----------------------------------------------------------------------
 #  HTTP / HTTPS proxy handler
 # ----------------------------------------------------------------------
@@ -436,6 +511,8 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
     resolver: DoHResolver = None
     cert_manager: CertManager = None
     mitm_enabled = False
+    auth_key = ""
+    fronted: "FrontedRelay" = None
     connect_timeout = 30
     relay_follow_redirects = True   # kept for potential future use, but not directly used in new logic
 
@@ -694,6 +771,9 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
             "validateSsl": True
         }
 
+        if self.auth_key:
+            payload["auth_key"] = self.auth_key
+
         if body:
             try:
                 payload["body"] = body.decode("utf-8")
@@ -707,54 +787,50 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
             print(f"[RELAY] {method} {parsed.hostname}...")
 
         try:
-            session = self.get_relay_session()
-
-            # ---------- Step 1: initial POST ----------
-            resp = session.post(
-                self.relay_url,
-                json=payload,
-                timeout=(8, 45),          # increased timeout for slow Iranian connections
-                allow_redirects=False,      # we handle the redirect ourselves
-                headers={"Content-Type": "application/json"},
-            )
-
-            # ---------- Step 2: handle the Google Apps Script redirect ----------
-            if resp.status_code in (301, 302, 303, 307, 308):
-                redirect_url = resp.headers.get("Location")
-                if redirect_url:
+            if self.fronted is not None:
+                body_bytes = json.dumps(payload).encode("utf-8")
+                status_code, _resp_headers, resp_body = self.fronted.request(
+                    "POST", self.relay_url, body=body_bytes,
+                    headers={"Content-Type": "application/json"},
+                )
+                final_text = resp_body.decode("utf-8", errors="replace")
+            else:
+                session = self.get_relay_session()
+                resp = session.post(
+                    self.relay_url,
+                    json=payload,
+                    timeout=(8, 45),
+                    allow_redirects=False,
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    redirect_url = resp.headers.get("Location")
+                    if not redirect_url:
+                        return {"status": 502, "error": "Relay returned redirect without Location header"}
                     if self.log_full_urls:
                         print(f"[RELAY] Following redirect to {redirect_url[:120]}...")
-                    # Google Apps Script expects a GET on the one-time URL
-                    resp = session.get(
-                        redirect_url,
-                        timeout=(8, 45),
-                        allow_redirects=True,
-                    )
-                else:
-                    return {"status": 502, "error": "Relay returned redirect without Location header"}
+                    resp = session.get(redirect_url, timeout=(8, 45), allow_redirects=True)
+                status_code = resp.status_code
+                final_text = resp.text
 
-            # ---------- Step 3: parse the final response ----------
-            if resp.status_code == 200:
+            if status_code == 200:
                 try:
-                    data = resp.json()
-                    return data
+                    return json.loads(final_text)
                 except json.JSONDecodeError:
-                    # Sometimes GAS returns HTML error pages
                     return {"status": 502, "error": "Invalid JSON from relay (maybe GAS error page)"}
             else:
-                err_msg = f"Relay returned HTTP {resp.status_code}"
-                try:
-                    text = resp.text[:200]
-                    if text:
-                        err_msg += f": {text}"
-                except Exception:
-                    pass
-                return {"status": resp.status_code, "error": err_msg}
+                err_msg = f"Relay returned HTTP {status_code}"
+                snippet = (final_text or "")[:200]
+                if snippet:
+                    err_msg += f": {snippet}"
+                return {"status": status_code, "error": err_msg}
 
         except requests.exceptions.Timeout:
             return {"status": 504, "error": "Relay timeout — ممکن است اینترنت شما کند باشد یا script.google.com مسدود شده باشد"}
         except requests.exceptions.ConnectionError as e:
             return {"status": 502, "error": f"Relay connection error: {str(e)[:200]} — آیا script.google.com باز است؟"}
+        except (socket.timeout, ssl.SSLError, OSError) as e:
+            return {"status": 502, "error": f"Relay connection error: {str(e)[:200]}"}
         except Exception as e:
             return {"status": 502, "error": f"Relay error: {str(e)[:200]}"}
 
@@ -959,11 +1035,20 @@ def main():
     socks_port = cfg.get("socks_port", 1080)
     doh_enabled = cfg.get("doh_enabled", True)
     doh_providers = cfg.get("doh_providers") or None
-    mode = cfg.get("mode", "vercel")
+    mode = cfg.get("mode", "apps_script")
     relay_url = get_relay_url(cfg)
     mitm_enabled = cfg.get("mitm_enabled", True)
     ca_dir = Path(cfg.get("ca_dir", "./ca"))
     relay_follow_redirects = cfg.get("relay_follow_redirects", True)   # kept for potential future use
+    auth_key = str(cfg.get("auth_key", "") or "")
+    front_enabled = bool(cfg.get("front_enabled", False))
+    front_sni = str(cfg.get("front_sni", "www.google.com") or "www.google.com")
+    front_ips = cfg.get("front_ips") or []
+
+    if not auth_key or auth_key == "CHANGE_ME_TO_A_LONG_RANDOM_SECRET":
+        print("[WARN] auth_key is empty or still the placeholder. Set a long random auth_key in config.local.yaml")
+        print("       and the SAME value as AUTH_KEY in your Google Apps Script, or anyone who finds your")
+        print("       relay URL can send traffic through your Google account.")
 
     print(V7_BANNER)
 
@@ -981,6 +1066,8 @@ def main():
     RelayProxyHandler.cert_manager = cert_manager
     RelayProxyHandler.mitm_enabled = mitm_enabled
     RelayProxyHandler.relay_follow_redirects = relay_follow_redirects
+    RelayProxyHandler.auth_key = auth_key
+    RelayProxyHandler.fronted = FrontedRelay(front_sni, front_ips) if front_enabled else None
 
     # Find available ports
     requested_socks_port = socks_port
@@ -1064,6 +1151,11 @@ def main():
         print(f"  SOCKS5 Proxy:     socks5://{bind_host}:{socks_port}")
     print(f"  DNS-over-HTTPS:   {'enabled' if doh_enabled else 'disabled'}")
     print(f"  HTTPS MITM:       {'enabled' if mitm_enabled else 'disabled (CONNECT will be rejected)'}")
+    print(f"  Auth key:         {'set' if auth_key and auth_key != 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET' else 'NOT SET'}")
+    if front_enabled:
+        print(f"  Domain fronting:  enabled (SNI {front_sni})")
+    else:
+        print(f"  Domain fronting:  disabled")
     print("=" * 60)
     print("")
     print("  Browser Proxy Settings:")

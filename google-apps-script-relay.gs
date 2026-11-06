@@ -14,6 +14,8 @@
  * 7. URL را در config.local.yaml قرار دهید
  */
 
+const AUTH_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET";
+
 function doPost(e) {
   try {
     if (!e.postData || !e.postData.contents) {
@@ -22,7 +24,10 @@ function doPost(e) {
 
     const payload = JSON.parse(e.postData.contents);
 
-    // --- Basic validation ---
+    if (AUTH_KEY && String(payload.auth_key || "") !== AUTH_KEY) {
+      return jsonOut({ error: "unauthorized" });
+    }
+
     if (!payload.method || !payload.url) {
       return jsonOut({
         error: "Invalid payload",
@@ -125,9 +130,8 @@ function doGet(e) {
   return jsonOut({
     status: "ok",
     service: "HTTP/HTTPS Relay Proxy",
-    version: "3.3",
-    message: "Send POST requests to relay HTTP calls.",
-    note: "Optimized for Iranian filtering conditions"
+    version: "3.4",
+    message: "Send authenticated POST requests to relay HTTP calls."
   });
 }
 

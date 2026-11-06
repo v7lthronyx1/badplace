@@ -1,17 +1,20 @@
 mode: apps_script
-apps_script_url: "https://script.google.com/macros/s/AKfycbyHaKClWmFD_cjwNAhVHccgDf35Kv5Nss9PDAY9IGr1Ae7NcfDxs4ZRWdKYzden3azP/exec"
-relay_url: ""   # خالی بگذارید – پروکسی خودش apps_script_url را می‌خواند
+apps_script_url: "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+relay_url: ""
+auth_key: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET"
 bind_host: 127.0.0.1
-bind_port: 8094
+bind_port: 8085
 socks_enabled: true
-socks_port: 1091
+socks_port: 1080
 doh_enabled: true
 doh_providers:
   - https://cloudflare-dns.com/dns-query
   - https://dns.google/resolve
 mitm_enabled: true
 ca_dir: ./ca
-# ⚠️ برای حفظ حریم خصوصی در شرایط فیلترینگ، همه لاگ‌ها غیرفعال شدند
+front_enabled: false
+front_sni: "www.google.com"
+front_ips: []
 log_full_urls: false
 log_cookies: false
 log_authorization: false

@@ -1,459 +1,246 @@
-```
-██████╗ ██████╗  ██████╗ ██╗  ██╗██╗   ██╗
-██╔══██╗██╔══██╗██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝
-██████╔╝██████╔╝██║   ██║ ╚███╔╝  ╚████╔╝ 
-██╔══██╗██╔══██╗██║   ██║ ██╔██╗   ╚██╔╝  
-██║  ██║██║  ██║╚██████╔╝██╔╝ ██╗   ██║   
-╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
-```
+# RELAY PROXY (badplace)
 
-# RELAY PROXY
+A local-only HTTP/HTTPS proxy that forwards your browser traffic through a
+relay you deploy on **Google Apps Script**. It runs on your own machine, binds
+to `127.0.0.1` only, and is meant for light web access when a network blocks
+sites directly.
 
-> **Forward HTTP traffic through any relay server (Vercel / Google Apps Script)**  
-> **Binds to 127.0.0.1 only — Not a VPN — Not an open proxy**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9+-brightgreen)](https://python.org)
-[![Vercel](https://img.shields.io/badge/Vercel-Deploy-black)](https://vercel.com)
-[![Version](https://img.shields.io/badge/version-3.3-informational)](#)
-
-**Author:** [v7lthronyx (Aiden Azad)](https://github.com/v74all)  
-**GitHub:** [github.com/v74all/badplace](https://github.com/v74all/badplace)
+- **Not a VPN.** Only apps you point at the proxy use it.
+- **Local only.** It listens on `127.0.0.1`; it is not an open proxy for others.
+- **Author:** v7lthronyx (Aiden Azad) — https://github.com/v74all/badplace
 
 ---
 
-<p align="center">
-  <img src="docs/screenshots/proxy-startup.png" width="620" alt="badplace proxy startup">
-</p>
+## How it works
+
+```
+Browser / app  ->  127.0.0.1:8085 (this proxy)  ->  Google Apps Script relay  ->  target site
+```
+
+1. You deploy a small script on your own Google account as a web app.
+2. This local proxy sends each request to that script as a JSON POST.
+3. The script fetches the URL with Google's own servers and returns the response.
+4. The proxy hands the response back to your browser.
+
+Your network only needs `script.google.com` and `script.googleusercontent.com`
+to be reachable. The relay runs inside Google, not on a server you rent.
 
 ---
 
-## 🇬🇧 English
+## Read this first (honest limits)
 
-### What is this?
-
-A **local-only HTTP/HTTPS proxy** that forwards traffic through a relay server.  
-It runs on your own machine and routes your HTTP traffic through a relay (Vercel serverless function or Google Apps Script).
-
-**Use cases:**
-- Bypass local network restrictions for HTTP traffic
-- Route browser traffic through an external relay
-- Test how your apps behave behind a proxy
-- Access region-restricted HTTP content
-
-### How it works
-
-```
-Browser/App → 127.0.0.1:8085 → Relay (Vercel/GAS) → Target Website
-```
-
-1. You configure your browser/app to use `127.0.0.1:8085` as HTTP proxy
-2. The proxy forwards each request to the relay server via JSON POST
-3. The relay fetches the actual URL and returns the response
-4. The proxy sends the response back to your browser/app
-
-### Quick Start
-
-```bash
-# 1. Clone and enter the project
-git clone https://github.com/v74all/badplace.git
-cd badplace
-
-# 2. Configure your relay URL
-export RELAY_URL='https://your-relay-url.com'
-
-# 3. Run the proxy
-./run-local.sh
-```
-
-### Prerequisites
-
-- Python 3.9+
-- `curl` (for connectivity checks)
-- A relay server (Vercel or Google Apps Script)
-
-### Configuration
-
-Edit `config.local.yaml`:
-
-```yaml
-mode: apps_script         # vercel | apps_script
-relay_url: ""
-apps_script_url: "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-bind_host: "127.0.0.1"
-bind_port: 8085
-socks_port: 1081
-mitm_enabled: false       # HTTPS MITM (advanced)
-doh_enabled: false       # Disable DoH for faster local DNS
-```
-
-Or use environment variables:
-
-```bash
-export APPS_SCRIPT_URL='https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
-```
-
-> Note: If your network blocks `script.google.com`, the proxy can still start, but Google Apps Script relay requests will fail. In that case, use Vercel or another relay host.
-
-### Deploy Your Own Relay
-
-#### Option 1: Vercel (Recommended)
-
-```bash
-# Deploy the relay function to Vercel
-npm install -g vercel
-vercel deploy
-
-# Or push to GitHub and import on vercel.com
-```
-
-The relay function is in `api/relay.js`. After deployment, use the Vercel URL as your `RELAY_URL`.
-
-#### Option 2: Google Apps Script
-
-1. Go to [script.google.com](https://script.google.com)
-2. Create a new project
-3. Copy the code from `google-apps-script-relay.gs`
-4. Deploy as Web App (Execute as: Me, Who has access: Anyone)
-5. Use the deployment URL as your `RELAY_URL`
-
-### Browser Setup
-
-**Chromium (isolated profile — recommended):**
-```bash
-chromium --proxy-server='http://127.0.0.1:8085' \
-         --user-data-dir='/tmp/proxy-browser-profile'
-```
-
-**Firefox:**
-1. `about:preferences` → Network Settings → Manual proxy
-2. HTTP Proxy: `127.0.0.1` Port: `8085`
-3. Check "Also use this proxy for HTTPS"
-4. No Proxy for: `localhost, 127.0.0.1`
-
-**System-wide (CLI tools):**
-```bash
-export http_proxy='http://127.0.0.1:8085'
-export https_proxy='http://127.0.0.1:8085'
-export no_proxy='localhost,127.0.0.1'
-```
-
-### Health Endpoints
-
-| Endpoint | Description |
-|---|---|
-| `http://127.0.0.1:8085/health` | Proxy status |
-| `http://127.0.0.1:8085/test-google` | Test Google connectivity |
-| `http://127.0.0.1:8085/test-relay` | Test relay connection |
-
-### Troubleshooting & Speed
-
-- If `script.google.com` یا `script.googleusercontent.com` مسدود است، از `Vercel` استفاده کنید.
-- `doh_enabled: false` را در `config.local.yaml` قرار دهید تا DNS محلی سریع‌تر شود.
-- اگر می‌خواهید پروکسی حتی در صورت شکست چک اتصال اجرا شود، از:
-  ```bash
-  STRICT_CHECKS=0 ./run-local.sh
-  ```
-- اگر می‌خواهید اجرای سخت‌گیرانه باشد، از:
-  ```bash
-  STRICT_CHECKS=1 ./run-local.sh
-  ```
-- برای تست سرعت:
-  ```bash
-  curl -x http://127.0.0.1:8085 http://httpbin.org/get
-  ```
-
-### Commands
-
-```bash
-./run-local.sh                # Start the proxy
-./stop-local.sh               # Stop the proxy
-python3 proxy.py --version    # Print version and exit
-python3 proxy.py --check      # Run connectivity checks and exit, without starting the proxy
-```
-
-### Security
-
-- ✅ Binds to `127.0.0.1` only — no LAN or internet exposure
-- ✅ HTTPS MITM disabled by default
-- ✅ Cache disabled by default
-- ✅ Full URLs, cookies, Authorization headers not logged
-- ✅ CA key stored with `chmod 600`
-- ❌ **This is NOT a VPN** — only works for apps configured to use the proxy
+- A free Google account allows **20,000 outbound fetches per day** (Apps Script
+  URL Fetch quota). One modern web page can be 50–100 requests, so this is
+  roughly **a few hundred page loads a day**. It suits reading, messaging and
+  light browsing, **not** video, streaming or large downloads.
+- Each fetched response is capped at **50 MB**, and each fetch can run up to
+  **6 minutes**. Big files and live video do not work well.
+- Requests leave from **Google's data-center IPs**. Some sites (for example
+  services behind Cloudflare) may show a CAPTCHA or block those IPs.
+- Speed is limited: every request makes a round trip through Google Apps Script,
+  so it is slower than a direct connection or a real server.
+- Using Apps Script as a general traffic relay can run against Google's Terms of
+  Service, and Google may suspend accounts that it considers abusive. **Use a
+  separate, throwaway Google account for this — never your main account.**
+- This tool does not hide your IP from the sites you visit through it in every
+  case, and it is **not** a replacement for a properly configured VPN or a
+  server you control.
 
 ---
 
-## 🇮🇷 فارسی
+## Prerequisites
 
-### این ابزار چیه؟
+- Python 3.9 or newer.
+- `curl` (used for the connectivity checks).
+- A Google account you are willing to use for this (a separate one is strongly
+  recommended).
 
-یک **پروکسی HTTP/HTTPS محلی** که ترافیک را از طریق یک سرور relay عبور می‌دهد.  
-روی سیستم خودتان اجرا می‌شود و ترافیک HTTP را از طریق Vercel یا Google Apps Script هدایت می‌کند.
+---
 
-**کاربردها:**
-- عبور از محدودیت‌های شبکه محلی برای ترافیک HTTP
-- هدایت ترافیک مرورگر از طریق یک relay خارجی
-- تست رفتار برنامه‌ها پشت پروکسی
-- دسترسی به محتوای محدود شده بر اساس منطقه
+## Step 1 — Deploy your relay on Google Apps Script
 
-### نحوه کار
+1. Open https://script.google.com and create a new project.
+2. Delete the sample code and paste the contents of
+   [`google-apps-script-relay.gs`](google-apps-script-relay.gs).
+3. Change the first line so the key is your own long random secret:
 
-```
-مرورگر/برنامه → 127.0.0.1:8085 → Relay (Vercel/GAS) → سایت مقصد
-```
+   ```javascript
+   const AUTH_KEY = "paste-a-long-random-secret-here";
+   ```
 
-1. مرورگر/برنامه خود را برای استفاده از `127.0.0.1:8085` به عنوان پروکسی HTTP تنظیم کنید
-2. پروکسی هر درخواست را به صورت JSON POST به سرور relay ارسال می‌کند
-3. Relay URL واقعی را fetch کرده و پاسخ را برمی‌گرداند
-4. پروکسی پاسخ را به مرورگر/برنامه شما ارسال می‌کند
+4. Click **Deploy -> New deployment -> Web app**.
+   - **Execute as:** Me
+   - **Who has access:** Anyone
+5. Copy the deployment URL. It ends in `/exec` and looks like
+   `https://script.google.com/macros/s/XXXXXXXX/exec`.
 
-### شروع سریع
+When you later change the script, use **Manage deployments -> Edit -> Version:
+New version** so the URL stays the same.
 
-```bash
-# 1. پروژه را clone کنید
-git clone https://github.com/v74all/badplace.git
-cd badplace
+## Step 2 — Configure the client
 
-# 2. URL relay خود را تنظیم کنید
-export RELAY_URL='https://your-relay-url.com'
+Edit [`config.local.yaml`](config.local.yaml):
 
-# 3. پروکسی را اجرا کنید
-./run-local.sh
-```
-
-### پیش‌نیازها
-
-- Python 3.9+
-- `curl` (برای چک اتصال)
-- یک سرور relay (Vercel یا Google Apps Script)
-
-### تنظیمات
-
-فایل `config.local.yaml` را ویرایش کنید:
-
-```yaml
-mode: apps_script        # vercel | apps_script
-relay_url: ""
-apps_script_url: "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-bind_host: "127.0.0.1"
-bind_port: 8085
-socks_port: 1081         # پورت SOCKS5
-doh_enabled: false       # DNS-over-HTTPS غیرفعال برای سرعت بیشتر
-mitm_enabled: false      # HTTPS MITM (پیشرفته)
-```
-
-یا از متغیرهای محیطی استفاده کنید:
-
-```bash
-export APPS_SCRIPT_URL='https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'
-```
-
-> توجه: اگر شبکه‌ی شما `script.google.com` را بلاک کند، پروکسی اجرا می‌شود اما ارسال درخواست به Google Apps Script با خطا مواجه خواهد شد. در این حالت `Vercel` انتخاب بهتری است.
-
-### نصب Relay خودتان
-
-#### گزینه 1: Vercel (پیشنهادی - سریع‌تر)
-
-```bash
-# نصب Vercel CLI
-npm install -g vercel
-
-# Deploy تابع relay
-vercel deploy
-```
-
-فایل relay در `api/relay.js` قرار دارد. بعد از deploy، URL Vercel را به عنوان `RELAY_URL` استفاده کنید.
-
-#### گزینه 2: Google Apps Script
-
-1. به [script.google.com](https://script.google.com) بروید
-2. یک پروژه جدید ایجاد کنید
-3. کد را از `google-apps-script-relay.gs` کپی کنید
-4. به عنوان Web App deploy کنید (Execute as: Me, Who has access: Anyone)
-5. URL deployment را به عنوان `APPS_SCRIPT_URL` استفاده کنید
-
-### تنظیمات مرورگر
-
-**Chromium (پروفایل ایزوله - توصیه می‌شود):**
-```bash
-chromium --proxy-server='http://127.0.0.1:8085' \
-         --user-data-dir='/tmp/proxy-browser-profile'
-```
-
-**Firefox:**
-1. `about:preferences` → Network Settings → Manual proxy
-2. HTTP Proxy: `127.0.0.1` Port: `8085`
-3. تیک "Also use this proxy for HTTPS"
-4. No Proxy for: `localhost, 127.0.0.1`
-
-**ابزارهای CLI (سیستم‌گسترده):**
-```bash
-export http_proxy='http://127.0.0.1:8085'
-export https_proxy='http://127.0.0.1:8085'
-export no_proxy='localhost,127.0.0.1'
-```
-
-### نقاط پایانی سلامت
-
-| نقطه پایانی | توضیح |
-|---|---|
-| `http://127.0.0.1:8085/health` | وضعیت پروکسی |
-| `http://127.0.0.1:8085/test-google` | تست اتصال گوگل |
-| `http://127.0.0.1:8085/test-relay` | تست اتصال relay |
-
-### دستورات
-
-```bash
-./run-local.sh                # شروع پروکسی
-./stop-local.sh               # توقف پروکسی
-python3 proxy.py --version    # نمایش نسخه و خروج
-python3 proxy.py --check      # تست اتصال و خروج، بدون اجرای پروکسی
-```
-
-### امنیت
-
-- ✅ فقط به `127.0.0.1` bind می‌شود — هیچ دسترسی LAN یا اینترنت
-- ✅ HTTPS MITM به طور پیش‌فرض غیرفعال
-- ✅ کش به طور پیش‌فرض غیرفعال
-- ✅ URL کامل، کوکی‌ها، هدر Authorization لاگ نمی‌شوند
-- ✅ کلید CA با `chmod 600` ذخیره می‌شود
-- ❌ **این VPN نیست** — فقط برای برنامه‌هایی که پروکسی را تنظیم کرده‌اند کار می‌کند
-
-### بهینه‌سازی سرعت
-
-برای بهبود سرعت:
-- از Vercel به جای Google Apps Script استفاده کنید (سریع‌تر است)
-- DoH را غیرفعال کنید (`doh_enabled: false`)
-- لاگ‌ها را در Google Script حذف کنید
-- تایم‌اوت را کاهش دهید (در کد تغییر دهید)
-- اتصال‌های مستقیم HTTPS ممکن است در شبکه‌های محدود شکست بخورند
-
-### تست سرعت
-
-برای تست سرعت پروکسی:
-
-```bash
-# تست سلامت پروکسی
-curl http://127.0.0.1:8085/health
-
-# تست اتصال گوگل
-curl http://127.0.0.1:8085/test-google
-
-# تست relay
-curl http://127.0.0.1:8085/test-relay
-
-# تست سرعت با سایت واقعی
-time curl -x http://127.0.0.1:8085 http://httpbin.org/get
-```
-
-### 🇮🇷 راهنمای ویژه: استفاده در شرایط فیلترینگ ایران
-
-> ⚠️ **توجه مهم**: این ابزار برای عبور از فیلترینگ ایران طراحی شده است. **فقط Google Apps Script** نیاز است باز باشد.
-
-#### پیش‌نیازها در ایران:
-1. **script.google.com باید باز باشد** — معمولاً در ایران فیلتر نیست
-2. **script.googleusercontent.com باید باز باشد** — برای redirectهای GAS
-3. **Python 3.9+** روی سیستم شما نصب باشد
-
-#### مراحل راه‌اندازی برای ایران:
-
-**۱. ساخت Google Apps Script Relay:**
-```bash
-# 1. به script.google.com بروید و پروژه جدید بسازید
-# 2. کد google-apps-script-relay.gs را کپی کنید
-# 3. Deploy → New deployment → Web app
-# 4. Execute as: Me, Who has access: Anyone
-# 5. URL را کپی کنید
-```
-
-**۲. تنظیم config.local.yaml:**
 ```yaml
 mode: apps_script
-apps_script_url: "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+apps_script_url: "https://script.google.com/macros/s/XXXXXXXX/exec"
+auth_key: "paste-the-SAME-long-random-secret-here"
 bind_host: 127.0.0.1
 bind_port: 8085
 socks_enabled: true
-socks_port: 1081
-doh_enabled: true          # DNS-over-HTTPS برای دور زدن DNS فیلترینگ
-mitm_enabled: true           # برای HTTPS لازم است
-# ⚠️ همه لاگ‌ها غیرفعال شدند برای حفظ حریم خصوصی
-log_full_urls: false
-log_cookies: false
-log_authorization: false
-log_request_bodies: false
+socks_port: 1080
+doh_enabled: true
+mitm_enabled: true
 ```
 
-**۳. اجرا:**
+The `auth_key` here must match the `AUTH_KEY` in your script exactly. Without a
+matching key the relay replies `unauthorized`, so a leaked URL alone cannot be
+used by someone else to spend your Google quota.
+
+## Step 3 — Run it
+
+**Linux / macOS:**
+
 ```bash
+git clone https://github.com/v74all/badplace.git
+cd badplace
 ./run-local.sh
 ```
 
-**۴. تست اتصال:**
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/v74all/badplace.git
+cd badplace
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python proxy.py --config config.local.yaml
+```
+
+Check the relay before browsing:
+
 ```bash
-# تست سلامت پروکسی
-curl http://127.0.0.1:8085/health
-
-# تست اتصال گوگل (مهم برای ایران)
-curl http://127.0.0.1:8085/test-google
-
-# تست relay
-curl http://127.0.0.1:8085/test-relay
+python proxy.py --check
 ```
 
-#### نکات مهم برای ایران:
-- **فقط Google Apps Script** نیاز است باز باشد — بقیه سایت‌ها از طریق relay باز می‌شوند
-- **Vercel فیلتر است** — در ایران از Google Apps Script استفاده کنید
-- **DoH فعال بگذارید** — برای دور زدن DNS فیلترینگ ایران
-- **MITM فعال بگذارید** — برای HTTPS لازم است
-- **حریم خصوصی**: همه لاگ‌ها غیرفعال شدند — هیچ URL، کوکی یا هدر Authorization لاگ نمی‌شود
+## Step 4 — Point your browser at the proxy
 
-#### عیب‌یابی در ایران:
+**Chromium / Chrome (separate profile):**
 
-- **script.google.com مسدود است**: این ابزار کار نخواهد کرد. VPN دیگری پیدا کنید.
-- **تایم‌اوت**: اینترنت شما کند است یا script.google.com ناپایدار است. دوباره تلاش کنید.
-- **HTTPS کار نمی‌کند**: `mitm_enabled: true` را در config بگذارید و CA certificate را در مرورگر نصب کنید.
-- **DNS کار نمی‌کند**: `doh_enabled: true` را بررسی کنید.
+```bash
+chromium --proxy-server="http://127.0.0.1:8085" --user-data-dir="/tmp/relay-profile"
+```
+
+**Firefox:** Settings -> Network Settings -> Manual proxy. HTTP Proxy
+`127.0.0.1` Port `8085`, also use it for HTTPS. No proxy for
+`localhost, 127.0.0.1`.
 
 ---
 
-### عیب‌یابی عمومی
+## HTTPS (MITM) and the local certificate
 
-- **پورت اشغال شده**: پورت‌ها را چک کنید و پروسه‌های قبلی را بکشید
-- **اتصال relay شکست خورد**: URL relay را چک کنید
-- **سرعت کم**: DoH را غیرفعال کنید (`doh_enabled: false`)
+To relay HTTPS, the proxy terminates TLS locally with a Certificate Authority it
+generates on your machine, then re-fetches the page through the relay. For your
+browser to trust it you install that CA (`ca/ca.pem`).
 
-### نکات امنیتی
+- The CA key (`ca/ca.key`) **never leaves your computer** and is stored with
+  `chmod 600`. Keep the whole `ca/` folder private; anyone with `ca/ca.key`
+  could impersonate sites to a browser that trusts your CA.
+- Install `ca/ca.pem` only in the browser profile you use for this, and remove
+  it when you are done.
+- Many mobile and desktop apps (banking apps, messengers, some browsers with
+  certificate pinning) will reject a user-installed CA and will not work through
+  the proxy. That is expected.
 
-- ✅ فقط روی `127.0.0.1` اجرا می‌شود
-- ✅ HTTPS MITM پیش‌فرض خاموش است
-- ✅ Cache پیش‌فرض خاموش است
-- ❌ **این یک VPN نیست**
-
----
-
-## 📁 Project Structure
-
-```
-├── proxy.py                  # Main proxy application
-├── config.local.yaml         # Local configuration
-├── run-local.sh              # Start script
-├── stop-local.sh             # Stop script
-├── requirements.txt          # Python dependencies
-├── api/
-│   └── relay.js              # Vercel serverless relay function
-├── vercel.json               # Vercel configuration
-├── google-apps-script-relay.gs  # Google Apps Script relay
-├── .banner                   # ASCII art banner
-├── docs/screenshots/         # README screenshots
-└── README.md                 # This file
-```
-
-## 📜 License
-
-MIT License — see [LICENSE](LICENSE) for details.
+If you do not need HTTPS, set `mitm_enabled: false` and only plain HTTP is
+relayed.
 
 ---
 
-<p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/v74all">v7lthronyx</a></sub>
-</p>
+## Optional — domain fronting
+
+If your network blocks `script.google.com` by its name (SNI) but still lets
+other Google domains through, you can make the relay connection present
+`www.google.com` as the TLS name while routing to Apps Script by the HTTP Host
+header. Enable it in `config.local.yaml`:
+
+```yaml
+front_enabled: true
+front_sni: "www.google.com"
+front_ips: []
+```
+
+Leave `front_ips` empty to resolve `www.google.com` normally, or list one or
+more Google front-end IPs if your DNS is tampered with. This is an extra step
+that may help on some networks and makes no difference on others; try the normal
+mode first.
+
+---
+
+## Commands
+
+```bash
+./run-local.sh                 # start (Linux/macOS)
+./stop-local.sh                # stop
+python proxy.py --version      # print version
+python proxy.py --check        # connectivity checks only, do not start
+```
+
+Health endpoints while running: `http://127.0.0.1:8085/health`,
+`/test-google`, `/test-relay`.
+
+---
+
+## Security notes
+
+- Binds to `127.0.0.1` only. No LAN or internet exposure.
+- Full URLs, cookies and Authorization headers are not logged by default.
+- Never commit or share `config.local.yaml` with a real `auth_key`, your
+  deployment URL, or the `ca/` folder.
+- You are responsible for following Google's Terms of Service and quotas. Misuse
+  can lead to suspension of the account or deployment you use.
+
+## راهنمای فارسی
+
+این ابزار یک **پروکسی محلی** است که ترافیک مرورگر شما را از طریق یک relay که
+خودتان روی **Google Apps Script** می‌سازید عبور می‌دهد. روی سیستم خودتان و فقط
+روی `127.0.0.1` اجرا می‌شود. **این یک VPN نیست** و فقط برنامه‌هایی که به آن وصل
+شوند از آن استفاده می‌کنند.
+
+**قبل از هر چیز این‌ها را بدانید:**
+
+- حساب رایگان گوگل روزانه حدود **۲۰٬۰۰۰ درخواست** اجازه می‌دهد؛ یعنی تقریباً چند
+  صد بار باز کردن صفحه در روز. برای خواندن، پیام‌رسان و وب‌گردی سبک مناسب است،
+  **نه** برای ویدیو، استریم یا دانلود بزرگ.
+- هر پاسخ حداکثر ۵۰ مگابایت و هر درخواست حداکثر ۶ دقیقه. فایل بزرگ و ویدیوی زنده
+  خوب کار نمی‌کند.
+- درخواست‌ها از آی‌پی‌های دیتاسنتر گوگل خارج می‌شوند؛ بعضی سایت‌ها (مثلاً سایت‌های
+  پشت Cloudflare) ممکن است کپچا نشان دهند.
+- استفاده از Apps Script به‌عنوان relay عمومی می‌تواند با شرایط سرویس گوگل در
+  تضاد باشد و گوگل ممکن است حساب را محدود کند. **با یک حساب گوگل جدا و
+  یک‌بارمصرف انجام دهید، نه حساب اصلی.**
+
+**مراحل:**
+
+۱. در https://script.google.com یک پروژه بسازید و کد
+`google-apps-script-relay.gs` را کپی کنید.
+۲. مقدار `AUTH_KEY` را به یک رمز تصادفی طولانی تغییر دهید.
+۳. از مسیر Deploy -> New deployment -> Web app با گزینه‌های «Execute as: Me» و
+«Who has access: Anyone» منتشر کنید و URL پایانی `/exec` را بردارید.
+۴. در `config.local.yaml`، همان `apps_script_url` و `auth_key` را بگذارید (کلید
+باید دقیقاً با کلید داخل اسکریپت یکی باشد).
+۵. اجرا: در لینوکس `./run-local.sh` و در ویندوز با ساخت محیط مجازی و
+`python proxy.py --config config.local.yaml`.
+۶. مرورگر را روی `127.0.0.1:8085` تنظیم کنید.
+
+برای HTTPS باید گواهی محلی `ca/ca.pem` را فقط در همان پروفایل مرورگر نصب کنید؛
+کلید `ca/ca.key` را با کسی به اشتراک نگذارید. اگر شبکه‌ی شما نام
+`script.google.com` را ببندد، می‌توانید گزینه‌ی `front_enabled: true` را امتحان
+کنید؛ روی بعضی شبکه‌ها کمک می‌کند و روی بعضی فرقی ندارد.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
