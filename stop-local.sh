@@ -8,7 +8,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/.proxy.pid"
 RUNTIME_FILE="$SCRIPT_DIR/.proxy.runtime.json"
 
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
@@ -24,7 +23,7 @@ stop_pid() {
     echo "Stopping $label (PID: $pid)..."
     kill "$pid" 2>/dev/null || true
 
-    for i in $(seq 1 5); do
+    for _ in 1 2 3 4 5; do
         if ! kill -0 "$pid" 2>/dev/null; then
             break
         fi

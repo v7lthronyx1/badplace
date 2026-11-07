@@ -1,7 +1,7 @@
 """
 v7lthronyx RELAY PROXY — Local Mode
 ====================================
-Forwards HTTP/HTTPS traffic through a relay (Vercel / Google Apps Script).
+Forwards HTTP/HTTPS traffic through your own Google Apps Script relay.
 Binds to 127.0.0.1 only. NOT a VPN — only apps configured to use it.
 
 Author : v7lthronyx (Aiden Azad)
@@ -81,19 +81,13 @@ def load_config(config_path: Path) -> dict:
         if cfg.get("mode") == "apps_script":
             cfg["apps_script_url"] = env_as_url
 
-    mode = cfg.get("mode", "vercel")
+    mode = cfg.get("mode", "apps_script")
 
-    if mode == "apps_script":
-        if not cfg.get("apps_script_url") and not cfg.get("relay_url"):
-            print("[ERROR] apps_script_url not set in config or APPS_SCRIPT_URL env var.")
-            sys.exit(1)
-    elif mode == "vercel":
-        if not cfg.get("relay_url"):
-            print("[ERROR] relay_url not set in config or RELAY_URL env var.")
-            print("        Example: export RELAY_URL='https://your-project.vercel.app'")
-            sys.exit(1)
-    else:
-        print(f"[ERROR] Unsupported mode: {mode}. Supported: 'vercel', 'apps_script'")
+    if mode != "apps_script":
+        print(f"[ERROR] Unsupported mode: {mode}. Supported: 'apps_script'")
+        sys.exit(1)
+    if not cfg.get("apps_script_url") and not cfg.get("relay_url"):
+        print("[ERROR] apps_script_url not set in config or APPS_SCRIPT_URL env var.")
         sys.exit(1)
 
     if "mitm_enabled" not in cfg:
@@ -103,10 +97,7 @@ def load_config(config_path: Path) -> dict:
 
 
 def get_relay_url(cfg: dict) -> str:
-    mode = cfg.get("mode", "vercel")
-    if mode == "apps_script":
-        return cfg.get("apps_script_url") or cfg.get("relay_url", "")
-    return cfg.get("relay_url", "")
+    return cfg.get("apps_script_url") or cfg.get("relay_url", "")
 
 
 CHECK_URLS = [
@@ -725,7 +716,7 @@ class RelayProxyHandler(BaseHTTPRequestHandler):
         try:
             self.send_response(status_code)
             for h_name, h_value in response_headers.items():
-                # The relay (Vercel fetch / Apps Script UrlFetchApp) already
+                # The relay (Apps Script UrlFetchApp) already
                 # decompresses the upstream body, so forwarding the upstream
                 # Content-Encoding would make the browser try to decompress
                 # plain bytes and corrupt the response. Content-Length is
