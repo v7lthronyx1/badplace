@@ -7,7 +7,7 @@ sites directly.
 
 - **Not a VPN.** Only apps you point at the proxy use it.
 - **Local only.** It listens on `127.0.0.1`; it is not an open proxy for others.
-- **Author:** v7lthronyx (Aiden Azad) — https://github.com/v74all/badplace
+- **Author:** v7lthronyx (Aiden Azad) — https://github.com/w59520760-sketch/badplace
 
 ---
 
@@ -102,7 +102,7 @@ used by someone else to spend your Google quota.
 **Linux / macOS:**
 
 ```bash
-git clone https://github.com/v74all/badplace.git
+git clone https://github.com/w59520760-sketch/badplace.git
 cd badplace
 ./run-local.sh
 ```
@@ -110,7 +110,7 @@ cd badplace
 **Windows (PowerShell):**
 
 ```powershell
-git clone https://github.com/v74all/badplace.git
+git clone https://github.com/w59520760-sketch/badplace.git
 cd badplace
 python -m venv .venv
 .venv\Scripts\Activate.ps1

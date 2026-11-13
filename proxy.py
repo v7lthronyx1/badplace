@@ -5,7 +5,7 @@ Forwards HTTP/HTTPS traffic through your own Google Apps Script relay.
 Binds to 127.0.0.1 only. NOT a VPN — only apps configured to use it.
 
 Author : v7lthronyx (Aiden Azad)
-GitHub : github.com/v74all/badplace
+GitHub : github.com/w59520760-sketch/badplace
 License: MIT
 
 Usage:
@@ -59,7 +59,7 @@ __   __    |  ___| | | |
                                             |___/
             R E L A Y   P R O X Y   v3.4
        Author : v7lthronyx (Aiden Azad)
-       GitHub : github.com/v74all/badplace
+       GitHub : github.com/w59520760-sketch/badplace
 """
 
 
